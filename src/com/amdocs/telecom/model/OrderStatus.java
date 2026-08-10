@@ -1,0 +1,6 @@
+package com.amdocs.telecom.model;
+
+public enum OrderStatus {
+    CREATED, VALIDATED, PAYMENT_PENDING, INVENTORY_RESERVED,
+    PROVISIONING, ACTIVATED, COMPLETED, FAILED, CANCELLED
+}

@@ -1,0 +1,35 @@
+# Java compiled files
+*.class
+out/
+target/
+bin/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local configuration / secrets
+config.properties
+*.local.properties
+.env
+.env.*
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Generated reports
+reports/generated/
