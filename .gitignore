@@ -20,6 +20,7 @@ Thumbs.db
 
 # Local configuration / secrets
 config.properties
+config/config.properties
 *.local.properties
 .env
 .env.*

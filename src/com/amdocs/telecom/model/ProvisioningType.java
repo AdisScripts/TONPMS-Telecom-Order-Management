@@ -7,4 +7,8 @@ public enum ProvisioningType {
     public String getDatabaseValue() {
         return this == FIVE_G_SERVICE ? "5G_SERVICE" : name();
     }
+
+    public static ProvisioningType fromDatabaseValue(String value) {
+        return "5G_SERVICE".equals(value) ? FIVE_G_SERVICE : valueOf(value);
+    }
 }

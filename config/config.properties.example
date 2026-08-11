@@ -1,0 +1,6 @@
+# Copy this file to config/config.properties and replace the placeholders locally.
+# config.properties is ignored by Git; do not commit real credentials.
+db.url=jdbc:mysql://localhost:3306/tonpms
+db.username=YOUR_USERNAME
+db.password=YOUR_PASSWORD
+db.driver=com.mysql.cj.jdbc.Driver

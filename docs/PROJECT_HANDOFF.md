@@ -16,14 +16,14 @@ The trainer transcript provides additional evaluation constraints.
 
 # 2. Current Project Status
 
-Current Phase: Phase 3 COMPLETE
+Current Phase: Phase 4 COMPLETE
 
 Phase 1 — Requirements Analysis: COMPLETE
 Phase 2 — Database Design: COMPLETE
 Phase 3 — Java Foundation: COMPLETE
-Phase 4 — JDBC + DAO: NOT STARTED
+Phase 4 — JDBC + DAO: COMPLETE
 
-No Phase 4 or later implementation should be assumed to exist.
+No Phase 5 or later implementation should be assumed to exist.
 
 ---
 
@@ -70,7 +70,7 @@ The project is divided into the following phases:
 9. Stream API Reports + File Handling
 10. Integration Testing + Final Documentation
 
-Only Phases 1–3 are currently complete.
+Only Phases 1–4 are currently complete.
 
 ---
 
@@ -368,13 +368,9 @@ Do not introduce patterns artificially.
 
 ---
 
-# 11. Next Phase — Phase 4
+# 11. Completed Phase — Phase 4
 
-The NEXT phase is:
-
-Phase 4 — JDBC + DAO Layer
-
-Phase 4 should focus ONLY on:
+Phase 4 implemented:
 
 - JDBC connection infrastructure
 - Database configuration
@@ -391,7 +387,12 @@ Phase 4 should focus ONLY on:
 - savepoints
 - Resource management
 
-Phase 4 should verify database connectivity and DAO behavior.
+- `DatabaseConfig`, `DatabaseConnection`, and `JdbcTransactionManager`
+- `DatabaseException`
+- DAO interfaces and JDBC implementations for all 16 approved tables
+- Prepared statements, ResultSet mapping, generated keys, and `OrderItemDao.saveBatch()`
+- `config/config.properties.example`; local `config/config.properties` is Git-ignored
+- a manual DAO integration smoke test that skips truthfully without local credentials/Connector-J
 
 ---
 
@@ -551,8 +552,8 @@ CURRENT STATUS:
 Phase 1: COMPLETE
 Phase 2: COMPLETE
 Phase 3: COMPLETE
-Phase 4: NOT STARTED
+Phase 4: COMPLETE
 
 NEXT ACTION:
 
-Begin Phase 4 — JDBC + DAO Layer only.
+Begin Phase 5 only when explicitly approved.
