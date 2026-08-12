@@ -7,6 +7,7 @@ import java.util.List;
 
 public interface NotificationService {
     void sendNotification(Long customerId, String message);
+    Notification createPendingNotification(Long customerId, String message);
     List<Notification> getNotificationsForCustomer(UserSession session, Long customerId) throws AccessDeniedException;
     void markAsRead(UserSession session, Long notificationId) throws AccessDeniedException;
 }

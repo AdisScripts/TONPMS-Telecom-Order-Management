@@ -33,6 +33,20 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    public Notification createPendingNotification(Long customerId, String message) {
+        if (customerId == null || message == null || message.trim().isEmpty()) {
+            throw new IllegalArgumentException("customerId and message must not be null or empty.");
+        }
+        Notification notification = new Notification("ALERT", message);
+        notification.setCustomerId(customerId);
+        notification.setStatus(NotificationStatus.PENDING);
+        notification.setCreatedAt(LocalDateTime.now());
+        long id = notificationDao.save(notification);
+        notification.setNotificationId(id);
+        return notification;
+    }
+
+    @Override
     public List<Notification> getNotificationsForCustomer(UserSession session, Long customerId) throws AccessDeniedException {
         if (session == null) {
             throw new AccessDeniedException("Active session required.");
