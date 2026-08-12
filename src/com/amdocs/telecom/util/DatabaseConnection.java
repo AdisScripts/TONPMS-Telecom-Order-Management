@@ -5,6 +5,9 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
+
 /** Creates short-lived JDBC connections or retrieves active thread-bound transaction connection. */
 public final class DatabaseConnection {
     private static volatile boolean driverLoaded;
@@ -15,7 +18,20 @@ public final class DatabaseConnection {
     public static Connection getConnection() {
         Connection current = threadConnection.get();
         if (current != null) {
-            return current;
+            return (Connection) Proxy.newProxyInstance(
+                Connection.class.getClassLoader(),
+                new Class<?>[] { Connection.class },
+                (proxy, method, args) -> {
+                    if ("close".equals(method.getName())) {
+                        return null;
+                    }
+                    try {
+                        return method.invoke(current, args);
+                    } catch (InvocationTargetException ex) {
+                        throw ex.getCause() != null ? ex.getCause() : ex;
+                    }
+                }
+            );
         }
         DatabaseConfig config = DatabaseConfig.getInstance();
         loadDriver(config.getDriver());
