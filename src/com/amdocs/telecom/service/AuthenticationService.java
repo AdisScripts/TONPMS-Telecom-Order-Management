@@ -15,7 +15,11 @@ public interface AuthenticationService {
 
     String generateOtp(Long userId, OtpPurpose purpose);
 
+    String generateOtpForUsername(String username, OtpPurpose purpose);
+
     void verifyOtp(Long userId, OtpPurpose purpose, String otpInput);
+
+    void verifyOtpForUsername(String username, OtpPurpose purpose, String otpInput);
 
     void changePassword(Long userId, String oldPassword, String newPassword);
 

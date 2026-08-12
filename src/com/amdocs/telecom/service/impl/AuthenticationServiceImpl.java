@@ -242,8 +242,28 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     @Override
+    public String generateOtpForUsername(String username, OtpPurpose purpose) {
+        if (username == null || username.trim().isEmpty()) {
+            throw new IllegalArgumentException("Username cannot be empty.");
+        }
+        AppUser user = appUserDao.findByUsername(username.trim())
+                .orElseThrow(() -> new TelecomDomainException("User not found for username: " + username));
+        return generateOtp(user.getUserId(), purpose);
+    }
+
+    @Override
     public void verifyOtp(Long userId, OtpPurpose purpose, String otpInput) {
         otpService.verifyOtp(userId, purpose, otpInput);
+    }
+
+    @Override
+    public void verifyOtpForUsername(String username, OtpPurpose purpose, String otpInput) {
+        if (username == null || username.trim().isEmpty()) {
+            throw new IllegalArgumentException("Username cannot be empty.");
+        }
+        AppUser user = appUserDao.findByUsername(username.trim())
+                .orElseThrow(() -> new TelecomDomainException("User not found for username: " + username));
+        verifyOtp(user.getUserId(), purpose, otpInput);
     }
 
     @Override
