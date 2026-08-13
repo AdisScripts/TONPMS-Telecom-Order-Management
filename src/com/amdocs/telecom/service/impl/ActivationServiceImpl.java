@@ -73,6 +73,10 @@ public class ActivationServiceImpl implements ActivationService {
         Optional<TelecomOrder> orderOpt = telecomOrderDao.findById(orderId);
         TelecomOrder order = orderOpt.orElseThrow(() -> new IllegalArgumentException("Order not found with ID: " + orderId));
 
+        if (order.getOrderStatus() == OrderStatus.ACTIVATED) {
+            return;
+        }
+
         if (order.getOrderStatus() != OrderStatus.PROVISIONING) {
             throw new InvalidOrderStatusException("Order ID " + orderId + " must be in PROVISIONING state to activate.");
         }

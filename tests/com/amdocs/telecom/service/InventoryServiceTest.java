@@ -37,6 +37,7 @@ public class InventoryServiceTest {
     public static void main(String[] args) {
         System.out.println("Running InventoryServiceTest...");
         testInventoryItemManagement();
+        testUpdateInventoryItem();
         testInventoryTypeMapping();
         testInventoryReservationSuccess();
         testInventoryReservationUnavailable();
@@ -86,6 +87,59 @@ public class InventoryServiceTest {
         // Status update by admin -> OK
         service.updateInventoryStatus(adminSession, added.getInventoryId(), InventoryStatus.RESERVED);
         require(service.getInventoryItemById(added.getInventoryId()).getStatus() == InventoryStatus.RESERVED, "Status update failed");
+    }
+
+    private static void testUpdateInventoryItem() {
+        MockInventoryItemDao inventoryDao = new MockInventoryItemDao();
+        MockTelecomOrderDao orderDao = new MockTelecomOrderDao();
+        MockOrderItemDao itemDao = new MockOrderItemDao();
+        MockTelecomProductDao productDao = new MockTelecomProductDao();
+
+        InventoryService service = new InventoryServiceImpl(inventoryDao, orderDao, itemDao, productDao);
+        UserSession adminSession = createSession(100L, null, RoleCode.INVENTORY_ADMINISTRATOR);
+        UserSession custSession = createSession(200L, 50L, RoleCode.CUSTOMER);
+
+        InventoryItem item1 = new InventoryItem("SIM-001", InventoryItemType.SIM, "");
+        item1.setSerialNumber("SN-111");
+        item1.setStatus(InventoryStatus.AVAILABLE);
+        item1.setAssignedOrderId(99L);
+        inventoryDao.save(item1);
+
+        InventoryItem item5 = new InventoryItem("ESIM-002", InventoryItemType.SIM, "Delhi");
+        item5.setSerialNumber("SN-555");
+        item5.setStatus(InventoryStatus.RESERVED);
+        inventoryDao.save(item5);
+
+        // 1. Edit item 1 (warehouse: blank -> Mumbai)
+        InventoryItem updated1 = service.updateInventoryItem(adminSession, item1.getInventoryId(), "SIM-001", InventoryItemType.SIM, "Mumbai");
+        require("Mumbai".equals(updated1.getWarehouse()), "Warehouse should be updated to Mumbai");
+        require(updated1.getItemType() == InventoryItemType.SIM, "Item type should remain SIM");
+        require(InventoryStatus.AVAILABLE == updated1.getStatus(), "Status should be preserved");
+        require("SN-111".equals(updated1.getSerialNumber()), "SerialNumber should be preserved");
+        require(Long.valueOf(99L).equals(updated1.getAssignedOrderId()), "AssignedOrderId should be preserved");
+
+        // 2. Edit item 5 (type: SIM -> ESIM)
+        InventoryItem updated5 = service.updateInventoryItem(adminSession, item5.getInventoryId(), "ESIM-002", InventoryItemType.ESIM, "Delhi");
+        require(updated5.getItemType() == InventoryItemType.ESIM, "Item type should be updated to ESIM");
+        require("Delhi".equals(updated5.getWarehouse()), "Warehouse should be Delhi");
+        require(InventoryStatus.RESERVED == updated5.getStatus(), "Status RESERVED should be preserved");
+        require("SN-555".equals(updated5.getSerialNumber()), "SerialNumber should be preserved");
+
+        // 3. Customer session -> AccessDeniedException
+        try {
+            service.updateInventoryItem(custSession, item1.getInventoryId(), "SIM-001", InventoryItemType.SIM, "Mumbai");
+            require(false, "Customer session should throw AccessDeniedException");
+        } catch (AccessDeniedException ex) {
+            // expected
+        }
+
+        // 4. Invalid inventory ID -> IllegalArgumentException
+        try {
+            service.updateInventoryItem(adminSession, 999L, "INVALID", InventoryItemType.SIM, "Mumbai");
+            require(false, "Invalid inventory ID should throw IllegalArgumentException");
+        } catch (IllegalArgumentException ex) {
+            // expected
+        }
     }
 
     private static void testInventoryTypeMapping() {

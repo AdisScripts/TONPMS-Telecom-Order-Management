@@ -219,6 +219,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             }
 
             AppUserRole userRole = new AppUserRole(userId, customerRoleOpt.get().getRoleId());
+            userRole.setAssignedAt(LocalDateTime.now());
             appUserRoleDao.save(userRole);
 
             JdbcTransactionManager.commit(conn);

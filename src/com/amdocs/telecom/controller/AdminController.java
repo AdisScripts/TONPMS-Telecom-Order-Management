@@ -145,10 +145,22 @@ public class AdminController {
                 String name = scanner.nextLine().trim();
                 out.print("Product Type: ");
                 String type = scanner.nextLine().trim();
+                out.print("Description: ");
+                String description = scanner.nextLine().trim();
                 out.print("Monthly Fee: ");
                 BigDecimal price = new BigDecimal(scanner.nextLine().trim());
+                out.print("Activation Fee: ");
+                String actFeeStr = scanner.nextLine().trim();
+                BigDecimal activationFee = actFeeStr.isEmpty() ? BigDecimal.ZERO : new BigDecimal(actFeeStr);
+                out.print("Contract Period (Months): ");
+                String contractStr = scanner.nextLine().trim();
+                int contractPeriod = contractStr.isEmpty() ? 12 : Integer.parseInt(contractStr);
 
                 TelecomProduct newProd = new TelecomProduct(code, name, type, price);
+                newProd.setDescription(description);
+                newProd.setActivationFee(activationFee);
+                newProd.setContractPeriod(contractPeriod);
+
                 productService.createProduct(session, newProd);
                 out.println("SUCCESS: New product created.");
             }
@@ -187,9 +199,13 @@ public class AdminController {
         try {
             List<InventoryItem> items = inventoryService.getAllInventoryItems(session);
             out.println("Total Inventory Items: " + items.size());
+            out.println("1. Add Inventory Item");
+            out.println("2. Edit Inventory Item");
+            out.println("3. Back");
+            out.print("Choice: ");
 
-            out.print("Add Inventory Item? (y/n): ");
-            if ("y".equalsIgnoreCase(scanner.nextLine().trim())) {
+            String choice = scanner.nextLine().trim();
+            if ("1".equals(choice)) {
                 out.print("Item Code: ");
                 String code = scanner.nextLine().trim();
                 out.print("Warehouse: ");
@@ -204,6 +220,22 @@ public class AdminController {
                 InventoryItem item = new InventoryItem(code, type, wh);
                 inventoryService.addInventoryItem(session, item);
                 out.println("SUCCESS: Inventory item added.");
+            } else if ("2".equals(choice)) {
+                out.print("Enter Inventory ID: ");
+                Long invId = Long.parseLong(scanner.nextLine().trim());
+                out.print("New Item Code: ");
+                String code = scanner.nextLine().trim();
+                out.print("New Warehouse: ");
+                String wh = scanner.nextLine().trim();
+                out.print("New Type (1. SIM, 2. ESIM, 3. ROUTER, 4. MODEM): ");
+                String tChoice = scanner.nextLine().trim();
+                InventoryItemType type = InventoryItemType.SIM;
+                if ("2".equals(tChoice)) type = InventoryItemType.ESIM;
+                else if ("3".equals(tChoice)) type = InventoryItemType.ROUTER;
+                else if ("4".equals(tChoice)) type = InventoryItemType.MODEM;
+
+                InventoryItem updated = inventoryService.updateInventoryItem(session, invId, code, type, wh);
+                out.println("SUCCESS: Inventory item #" + updated.getInventoryId() + " updated successfully.");
             }
         } catch (Exception e) {
             out.println("ERROR: " + e.getMessage());

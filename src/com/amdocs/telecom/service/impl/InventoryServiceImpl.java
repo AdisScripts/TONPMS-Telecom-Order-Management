@@ -64,6 +64,35 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     @Override
+    public InventoryItem updateInventoryItem(UserSession session, Long inventoryId, String itemCode,
+                                            InventoryItemType itemType, String warehouse) throws AccessDeniedException {
+        checkInventoryAdminAccess(session);
+        if (inventoryId == null) {
+            throw new IllegalArgumentException("inventoryId must not be null.");
+        }
+        if (itemCode == null || itemCode.trim().isEmpty()) {
+            throw new IllegalArgumentException("itemCode must not be null or empty.");
+        }
+        if (itemType == null) {
+            throw new IllegalArgumentException("itemType must not be null.");
+        }
+        if (warehouse == null || warehouse.trim().isEmpty()) {
+            throw new IllegalArgumentException("warehouse must not be null or empty.");
+        }
+
+        InventoryItem item = getInventoryItemById(inventoryId);
+        item.setItemCode(itemCode.trim());
+        item.setItemType(itemType);
+        item.setWarehouse(warehouse.trim());
+
+        boolean updated = inventoryItemDao.update(item);
+        if (!updated) {
+            throw new IllegalStateException("Failed to update inventory item.");
+        }
+        return item;
+    }
+
+    @Override
     public void updateInventoryStatus(UserSession session, Long inventoryId, InventoryStatus newStatus) throws AccessDeniedException {
         checkInventoryAdminAccess(session);
         if (inventoryId == null || newStatus == null) {

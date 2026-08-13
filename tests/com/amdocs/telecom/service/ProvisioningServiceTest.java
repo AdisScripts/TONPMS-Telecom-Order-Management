@@ -132,24 +132,107 @@ public class ProvisioningServiceTest {
         MockTelecomOrderDao orderDao = new MockTelecomOrderDao();
         MockCustomerDao customerDao = new MockCustomerDao();
         MockAuditLogDao auditDao = new MockAuditLogDao();
+        MockCustomerSubscriptionDao subDao = new MockCustomerSubscriptionDao();
+        MockOrderItemDao orderItemDao = new MockOrderItemDao();
+        MockTelecomProductDao productDao = new MockTelecomProductDao();
+        MockInventoryItemDao inventoryDao = new MockInventoryItemDao();
+        MockNotificationService notificationService = new MockNotificationService();
 
         AuditService auditService = new AuditServiceImpl(auditDao);
-        ProvisioningService service = new ProvisioningServiceImpl(reqDao, engDao, orderDao, customerDao, auditService);
+        ActivationService activationService = new com.amdocs.telecom.service.impl.ActivationServiceImpl(
+                subDao, orderDao, orderItemDao, productDao, inventoryDao, reqDao, notificationService, auditService
+        );
+        ProvisioningService service = new ProvisioningServiceImpl(reqDao, engDao, orderDao, customerDao, auditService, activationService);
 
+        // Engineer 20
         ProvisioningEngineer e1 = new ProvisioningEngineer("ENG-20", "Engineer 20", "5G_SERVICE", "Delhi");
         e1.setAvailability(EngineerAvailability.AVAILABLE); e1.setActiveTasks(1); e1.setExperienceYears(6);
         engDao.save(e1);
 
+        // Product
+        com.amdocs.telecom.model.TelecomProduct prod = new com.amdocs.telecom.model.TelecomProduct("P-5G", "5G Plan", "MOBILE_PLAN", new java.math.BigDecimal("999.00"));
+        prod.setContractPeriod(12);
+        long prodId = productDao.save(prod);
+
+        // Order
+        TelecomOrder order = new TelecomOrder();
+        order.setCustomerId(101L);
+        order.setOrderNumber("ORD-50");
+        order.setOrderStatus(OrderStatus.PROVISIONING);
+        long orderId = orderDao.save(order);
+
+        com.amdocs.telecom.model.OrderItem oItem = new com.amdocs.telecom.model.OrderItem(prodId, 1, new java.math.BigDecimal("999.00"));
+        oItem.setOrderId(orderId);
+        orderItemDao.save(oItem);
+
+        com.amdocs.telecom.model.InventoryItem inv = new com.amdocs.telecom.model.InventoryItem("SIM-50", com.amdocs.telecom.model.InventoryItemType.SIM, "Delhi");
+        inv.setStatus(com.amdocs.telecom.model.InventoryStatus.RESERVED);
+        inv.setAssignedOrderId(orderId);
+        inventoryDao.save(inv);
+
         ProvisioningRequest req = new ProvisioningRequest();
-        req.setOrderId(50L); req.setServiceId("SRV-50"); req.setProvisioningType(ProvisioningType.FIVE_G_SERVICE);
+        req.setOrderId(orderId); req.setServiceId("SRV-50"); req.setProvisioningType(ProvisioningType.FIVE_G_SERVICE);
         req.setEngineerId(e1.getEngineerId()); req.setStatus(ProvisioningStatus.IN_PROGRESS);
         long reqId = reqDao.save(req);
 
         UserSession engSession = createSession(20L, null, RoleCode.PROVISIONING_ENGINEER);
+
+        // Test 1: SUCCESS update triggers activation
         service.updateProvisioningStatus(engSession, reqId, ProvisioningStatus.SUCCESS, null);
 
         require(reqDao.findById(reqId).get().getStatus() == ProvisioningStatus.SUCCESS, "Status should be SUCCESS");
         require(engDao.findById(e1.getEngineerId()).get().getActiveTasks() == 0, "Engineer activeTasks should decrement to 0");
+        require(orderDao.findById(orderId).get().getOrderStatus() == OrderStatus.ACTIVATED, "Order status should become ACTIVATED");
+        require(subDao.findByCustomerId(101L).size() == 1, "CustomerSubscription should be created");
+        require(inventoryDao.findById(inv.getInventoryId()).get().getStatus() == com.amdocs.telecom.model.InventoryStatus.INSTALLED, "Inventory status should be INSTALLED");
+
+        // Test 1B: Resubmitting SUCCESS on already ACTIVATED order does not duplicate subscription or decrement activeTasks below 0
+        service.updateProvisioningStatus(engSession, reqId, ProvisioningStatus.SUCCESS, null);
+        require(subDao.findByCustomerId(101L).size() == 1, "Subscription count must remain 1 on repeated SUCCESS call");
+        require(engDao.findById(e1.getEngineerId()).get().getActiveTasks() == 0, "Engineer activeTasks must remain 0 on repeated SUCCESS call");
+
+        // Test 2: Already-SUCCESS request whose order is still PROVISIONING (e.g. Order 25 case) -> Triggers activation
+        TelecomOrder order25 = new TelecomOrder();
+        order25.setCustomerId(105L);
+        order25.setOrderNumber("ORD-25");
+        order25.setOrderStatus(OrderStatus.PROVISIONING);
+        long order25Id = orderDao.save(order25);
+
+        com.amdocs.telecom.model.OrderItem oItem25 = new com.amdocs.telecom.model.OrderItem(prodId, 1, new java.math.BigDecimal("999.00"));
+        oItem25.setOrderId(order25Id);
+        orderItemDao.save(oItem25);
+
+        ProvisioningRequest req25 = new ProvisioningRequest();
+        req25.setOrderId(order25Id); req25.setServiceId("SRV-25"); req25.setProvisioningType(ProvisioningType.FIVE_G_SERVICE);
+        req25.setEngineerId(e1.getEngineerId()); req25.setStatus(ProvisioningStatus.SUCCESS); // already SUCCESS
+        long req25Id = reqDao.save(req25);
+
+        service.updateProvisioningStatus(engSession, req25Id, ProvisioningStatus.SUCCESS, null);
+        require(orderDao.findById(order25Id).get().getOrderStatus() == OrderStatus.ACTIVATED, "Already-SUCCESS request with PROVISIONING order must activate order");
+        require(subDao.findByCustomerId(105L).size() == 1, "CustomerSubscription must be created for Order 25");
+        require(engDao.findById(e1.getEngineerId()).get().getActiveTasks() == 0, "Active tasks must not decrement when request was already SUCCESS");
+
+        // Test 3: FAILED update on another request does not activate
+        ProvisioningEngineer e2 = new ProvisioningEngineer("ENG-21", "Engineer 21", "BROADBAND", "Delhi");
+        e2.setAvailability(EngineerAvailability.AVAILABLE); e2.setActiveTasks(1); e2.setExperienceYears(4);
+        engDao.save(e2);
+
+        TelecomOrder orderFail = new TelecomOrder();
+        orderFail.setCustomerId(102L);
+        orderFail.setOrderNumber("ORD-51");
+        orderFail.setOrderStatus(OrderStatus.PROVISIONING);
+        long failOrderId = orderDao.save(orderFail);
+
+        ProvisioningRequest reqFail = new ProvisioningRequest();
+        reqFail.setOrderId(failOrderId); reqFail.setServiceId("SRV-51"); reqFail.setProvisioningType(ProvisioningType.BROADBAND);
+        reqFail.setEngineerId(e2.getEngineerId()); reqFail.setStatus(ProvisioningStatus.IN_PROGRESS);
+        long reqFailId = reqDao.save(reqFail);
+
+        service.updateProvisioningStatus(engSession, reqFailId, ProvisioningStatus.FAILED, "Line fault detected");
+        require(reqDao.findById(reqFailId).get().getStatus() == ProvisioningStatus.FAILED, "Status should be FAILED");
+        require(engDao.findById(e2.getEngineerId()).get().getActiveTasks() == 0, "Engineer activeTasks should decrement to 0");
+        require(orderDao.findById(failOrderId).get().getOrderStatus() == OrderStatus.PROVISIONING, "FAILED provisioning must not activate order");
+        require(subDao.findByCustomerId(102L).isEmpty(), "FAILED provisioning must not create subscription");
     }
 
     // Mock DAOs
@@ -208,5 +291,60 @@ public class ProvisioningServiceTest {
         @Override public synchronized List<AuditLog> findAll() { return new ArrayList<>(storage.values()); }
         @Override public synchronized boolean update(AuditLog entity) { if (storage.containsKey(entity.getAuditId())) { storage.put(entity.getAuditId(), entity); return true; } return false; }
         @Override public synchronized boolean delete(Long id) { return storage.remove(id) != null; }
+    }
+
+    private static class MockCustomerSubscriptionDao implements com.amdocs.telecom.dao.CustomerSubscriptionDao {
+        private final Map<Long, com.amdocs.telecom.model.CustomerSubscription> map = new HashMap<>();
+        private long seq = 1L;
+        @Override public synchronized long save(com.amdocs.telecom.model.CustomerSubscription sub) { sub.setSubscriptionId(seq++); map.put(sub.getSubscriptionId(), sub); return sub.getSubscriptionId(); }
+        @Override public synchronized Optional<com.amdocs.telecom.model.CustomerSubscription> findById(Long id) { return Optional.ofNullable(map.get(id)); }
+        @Override public synchronized Optional<com.amdocs.telecom.model.CustomerSubscription> findByServiceId(String serviceId) { return map.values().stream().filter(s -> serviceId.equals(s.getServiceId())).findFirst(); }
+        @Override public synchronized List<com.amdocs.telecom.model.CustomerSubscription> findByCustomerId(Long customerId) { List<com.amdocs.telecom.model.CustomerSubscription> res = new ArrayList<>(); for (com.amdocs.telecom.model.CustomerSubscription s : map.values()) { if (customerId.equals(s.getCustomerId())) res.add(s); } return res; }
+        @Override public synchronized List<com.amdocs.telecom.model.CustomerSubscription> findAll() { return new ArrayList<>(map.values()); }
+        @Override public synchronized boolean update(com.amdocs.telecom.model.CustomerSubscription sub) { map.put(sub.getSubscriptionId(), sub); return true; }
+        @Override public synchronized boolean delete(Long id) { return map.remove(id) != null; }
+    }
+
+    private static class MockOrderItemDao implements com.amdocs.telecom.dao.OrderItemDao {
+        private final Map<Long, com.amdocs.telecom.model.OrderItem> map = new HashMap<>();
+        private long seq = 1L;
+        @Override public synchronized long save(com.amdocs.telecom.model.OrderItem item) { item.setOrderItemId(seq++); map.put(item.getOrderItemId(), item); return item.getOrderItemId(); }
+        @Override public synchronized Optional<com.amdocs.telecom.model.OrderItem> findById(Long id) { return Optional.ofNullable(map.get(id)); }
+        @Override public synchronized List<com.amdocs.telecom.model.OrderItem> findByOrderId(Long orderId) { List<com.amdocs.telecom.model.OrderItem> res = new ArrayList<>(); for (com.amdocs.telecom.model.OrderItem item : map.values()) { if (orderId.equals(item.getOrderId())) res.add(item); } return res; }
+        @Override public synchronized int[] saveBatch(List<com.amdocs.telecom.model.OrderItem> items) { for (com.amdocs.telecom.model.OrderItem item : items) save(item); return new int[]{items.size()}; }
+        @Override public synchronized List<com.amdocs.telecom.model.OrderItem> findAll() { return new ArrayList<>(map.values()); }
+        @Override public synchronized boolean update(com.amdocs.telecom.model.OrderItem item) { map.put(item.getOrderItemId(), item); return true; }
+        @Override public synchronized boolean delete(Long id) { return map.remove(id) != null; }
+    }
+
+    private static class MockTelecomProductDao implements com.amdocs.telecom.dao.TelecomProductDao {
+        private final Map<Long, com.amdocs.telecom.model.TelecomProduct> map = new HashMap<>();
+        private long seq = 1L;
+        @Override public synchronized long save(com.amdocs.telecom.model.TelecomProduct prod) { prod.setProductId(seq++); map.put(prod.getProductId(), prod); return prod.getProductId(); }
+        @Override public synchronized Optional<com.amdocs.telecom.model.TelecomProduct> findById(Long id) { return Optional.ofNullable(map.get(id)); }
+        @Override public synchronized Optional<com.amdocs.telecom.model.TelecomProduct> findByProductCode(String code) { return map.values().stream().filter(p -> code.equals(p.getProductCode())).findFirst(); }
+        @Override public synchronized List<com.amdocs.telecom.model.TelecomProduct> findActiveProducts() { return new ArrayList<>(map.values()); }
+        @Override public synchronized List<com.amdocs.telecom.model.TelecomProduct> findAll() { return new ArrayList<>(map.values()); }
+        @Override public synchronized boolean update(com.amdocs.telecom.model.TelecomProduct prod) { map.put(prod.getProductId(), prod); return true; }
+        @Override public synchronized boolean delete(Long id) { return map.remove(id) != null; }
+    }
+
+    private static class MockInventoryItemDao implements com.amdocs.telecom.dao.InventoryItemDao {
+        private final Map<Long, com.amdocs.telecom.model.InventoryItem> map = new HashMap<>();
+        private long seq = 1L;
+        @Override public synchronized long save(com.amdocs.telecom.model.InventoryItem item) { item.setInventoryId(seq++); map.put(item.getInventoryId(), item); return item.getInventoryId(); }
+        @Override public synchronized Optional<com.amdocs.telecom.model.InventoryItem> findById(Long id) { return Optional.ofNullable(map.get(id)); }
+        @Override public synchronized Optional<com.amdocs.telecom.model.InventoryItem> findByItemCode(String code) { return map.values().stream().filter(i -> code.equalsIgnoreCase(i.getItemCode())).findFirst(); }
+        @Override public synchronized List<com.amdocs.telecom.model.InventoryItem> findByStatus(String status) { List<com.amdocs.telecom.model.InventoryItem> res = new ArrayList<>(); for (com.amdocs.telecom.model.InventoryItem i : map.values()) { if (i.getStatus() != null && i.getStatus().name().equalsIgnoreCase(status)) res.add(i); } return res; }
+        @Override public synchronized List<com.amdocs.telecom.model.InventoryItem> findAll() { return new ArrayList<>(map.values()); }
+        @Override public synchronized boolean update(com.amdocs.telecom.model.InventoryItem item) { map.put(item.getInventoryId(), item); return true; }
+        @Override public synchronized boolean delete(Long id) { return map.remove(id) != null; }
+    }
+
+    private static class MockNotificationService implements com.amdocs.telecom.service.NotificationService {
+        @Override public void sendNotification(Long customerId, String message) { }
+        @Override public com.amdocs.telecom.model.Notification createPendingNotification(Long customerId, String message) { com.amdocs.telecom.model.Notification n = new com.amdocs.telecom.model.Notification("INFO", message); n.setCustomerId(customerId); return n; }
+        @Override public List<com.amdocs.telecom.model.Notification> getNotificationsForCustomer(UserSession session, Long customerId) { return new ArrayList<>(); }
+        @Override public void markAsRead(UserSession session, Long notificationId) { }
     }
 }

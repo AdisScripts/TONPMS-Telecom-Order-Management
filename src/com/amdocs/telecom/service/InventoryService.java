@@ -10,6 +10,7 @@ import java.util.List;
 
 public interface InventoryService {
     InventoryItem addInventoryItem(UserSession session, InventoryItem item) throws AccessDeniedException;
+    InventoryItem updateInventoryItem(UserSession session, Long inventoryId, String itemCode, InventoryItemType itemType, String warehouse) throws AccessDeniedException;
     void updateInventoryStatus(UserSession session, Long inventoryId, InventoryStatus newStatus) throws AccessDeniedException;
     InventoryItem getInventoryItemById(Long inventoryId);
     InventoryItem getInventoryItemByCode(String itemCode);

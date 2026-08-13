@@ -45,6 +45,10 @@ public class AuthenticationServiceTest {
         Optional<AppUser> userOpt = env.userDao.findByUsername("alice_smith");
         assertTrue(userOpt.isPresent(), "AppUser 'alice_smith' must exist.");
         assertEquals(registered.getCustomerId(), userOpt.get().getCustomerId(), "AppUser must link to Customer.");
+
+        List<AppUserRole> userRoles = env.userRoleDao.findByUserId(userOpt.get().getUserId());
+        assertTrue(!userRoles.isEmpty(), "User roles must not be empty.");
+        assertNotNull(userRoles.get(0).getAssignedAt(), "AppUserRole assignedAt timestamp must not be null.");
     }
 
     private static void testLoginSuccess(AuthenticationService authService, TestEnvironment env) {
@@ -298,7 +302,13 @@ public class AuthenticationServiceTest {
         List<AppUserRole> userRoles = new ArrayList<>();
 
         @Override
-        public boolean save(AppUserRole entity) { userRoles.add(entity); return true; }
+        public boolean save(AppUserRole entity) {
+            if (entity.getAssignedAt() == null) {
+                throw new IllegalArgumentException("AppUserRole assignedAt must not be null.");
+            }
+            userRoles.add(entity);
+            return true;
+        }
 
         @Override
         public Optional<AppUserRole> findByUserIdAndRoleId(Long userId, Short roleId) {

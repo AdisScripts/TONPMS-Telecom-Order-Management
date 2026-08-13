@@ -121,8 +121,8 @@ public class MainApplication {
         AuditService auditService = new AuditServiceImpl(auditLogDao);
 
         InventoryService inventoryService = new InventoryServiceImpl(inventoryItemDao, telecomOrderDao, orderItemDao, telecomProductDao);
-        ProvisioningService provisioningService = new ProvisioningServiceImpl(provisioningRequestDao, provisioningEngineerDao, telecomOrderDao, customerDao, auditService);
         ActivationService activationService = new ActivationServiceImpl(customerSubscriptionDao, telecomOrderDao, orderItemDao, telecomProductDao, inventoryItemDao, provisioningRequestDao, notificationService, auditService);
+        ProvisioningService provisioningService = new ProvisioningServiceImpl(provisioningRequestDao, provisioningEngineerDao, telecomOrderDao, customerDao, auditService, activationService);
         OrderService orderService = new OrderServiceImpl(telecomOrderDao, orderItemDao, customerService, productService);
         PaymentService paymentService = new PaymentServiceImpl(orderPaymentDao, telecomOrderDao, orderService, inventoryService, auditService);
 

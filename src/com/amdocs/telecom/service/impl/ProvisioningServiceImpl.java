@@ -37,28 +37,40 @@ public class ProvisioningServiceImpl implements ProvisioningService {
     private final CustomerDao customerDao;
     private final AuditService auditService;
     private final AuthorizationService authorizationService;
+    private final com.amdocs.telecom.service.ActivationService activationService;
 
     public ProvisioningServiceImpl(ProvisioningRequestDao provisioningRequestDao,
                                   ProvisioningEngineerDao provisioningEngineerDao,
                                   TelecomOrderDao telecomOrderDao, CustomerDao customerDao,
                                   AuditService auditService) {
-        this.provisioningRequestDao = Objects.requireNonNull(provisioningRequestDao, "provisioningRequestDao must not be null");
-        this.provisioningEngineerDao = Objects.requireNonNull(provisioningEngineerDao, "provisioningEngineerDao must not be null");
-        this.telecomOrderDao = Objects.requireNonNull(telecomOrderDao, "telecomOrderDao must not be null");
-        this.customerDao = Objects.requireNonNull(customerDao, "customerDao must not be null");
-        this.auditService = Objects.requireNonNull(auditService, "auditService must not be null");
-        this.authorizationService = new AuthorizationServiceImpl();
+        this(provisioningRequestDao, provisioningEngineerDao, telecomOrderDao, customerDao, auditService, null, new AuthorizationServiceImpl());
+    }
+
+    public ProvisioningServiceImpl(ProvisioningRequestDao provisioningRequestDao,
+                                  ProvisioningEngineerDao provisioningEngineerDao,
+                                  TelecomOrderDao telecomOrderDao, CustomerDao customerDao,
+                                  AuditService auditService, com.amdocs.telecom.service.ActivationService activationService) {
+        this(provisioningRequestDao, provisioningEngineerDao, telecomOrderDao, customerDao, auditService, activationService, new AuthorizationServiceImpl());
     }
 
     public ProvisioningServiceImpl(ProvisioningRequestDao provisioningRequestDao,
                                   ProvisioningEngineerDao provisioningEngineerDao,
                                   TelecomOrderDao telecomOrderDao, CustomerDao customerDao,
                                   AuditService auditService, AuthorizationService authorizationService) {
+        this(provisioningRequestDao, provisioningEngineerDao, telecomOrderDao, customerDao, auditService, null, authorizationService);
+    }
+
+    public ProvisioningServiceImpl(ProvisioningRequestDao provisioningRequestDao,
+                                  ProvisioningEngineerDao provisioningEngineerDao,
+                                  TelecomOrderDao telecomOrderDao, CustomerDao customerDao,
+                                  AuditService auditService, com.amdocs.telecom.service.ActivationService activationService,
+                                  AuthorizationService authorizationService) {
         this.provisioningRequestDao = Objects.requireNonNull(provisioningRequestDao, "provisioningRequestDao must not be null");
         this.provisioningEngineerDao = Objects.requireNonNull(provisioningEngineerDao, "provisioningEngineerDao must not be null");
         this.telecomOrderDao = Objects.requireNonNull(telecomOrderDao, "telecomOrderDao must not be null");
         this.customerDao = Objects.requireNonNull(customerDao, "customerDao must not be null");
         this.auditService = Objects.requireNonNull(auditService, "auditService must not be null");
+        this.activationService = activationService;
         this.authorizationService = Objects.requireNonNull(authorizationService, "authorizationService must not be null");
     }
 
@@ -187,6 +199,10 @@ public class ProvisioningServiceImpl implements ProvisioningService {
         Optional<ProvisioningRequest> opt = provisioningRequestDao.findById(provisioningId);
         ProvisioningRequest req = opt.orElseThrow(() -> new IllegalArgumentException("Provisioning request not found with ID: " + provisioningId));
 
+        ProvisioningStatus oldStatus = req.getStatus();
+        boolean isTerminalTransition = (status == ProvisioningStatus.SUCCESS || status == ProvisioningStatus.FAILED)
+                && (oldStatus != ProvisioningStatus.SUCCESS && oldStatus != ProvisioningStatus.FAILED);
+
         Connection conn = null;
         try {
             conn = DatabaseConnection.getConnection();
@@ -198,7 +214,7 @@ public class ProvisioningServiceImpl implements ProvisioningService {
             if (errorMessage != null) {
                 req.setErrorMessage(errorMessage);
             }
-            if (status == ProvisioningStatus.SUCCESS || status == ProvisioningStatus.FAILED) {
+            if (isTerminalTransition) {
                 req.setCompletedDate(LocalDateTime.now());
                 if (req.getEngineerId() != null) {
                     Optional<ProvisioningEngineer> engOpt = provisioningEngineerDao.findById(req.getEngineerId());
@@ -238,6 +254,13 @@ public class ProvisioningServiceImpl implements ProvisioningService {
                 try {
                     conn.close();
                 } catch (Exception ignored) { }
+            }
+        }
+
+        if (status == ProvisioningStatus.SUCCESS && activationService != null && req.getOrderId() != null) {
+            Optional<TelecomOrder> orderOpt = telecomOrderDao.findById(req.getOrderId());
+            if (orderOpt.isPresent() && orderOpt.get().getOrderStatus() == OrderStatus.PROVISIONING) {
+                activationService.activateService(session, req.getOrderId());
             }
         }
     }

@@ -72,6 +72,10 @@ public class AuthenticationController {
         String email = scanner.nextLine().trim();
         out.print("Phone: ");
         String phone = scanner.nextLine().trim();
+        out.print("Street Address: ");
+        String address = scanner.nextLine().trim();
+        out.print("City: ");
+        String city = scanner.nextLine().trim();
         out.print("Customer Type (1. INDIVIDUAL, 2. SME, 3. ENTERPRISE): ");
         String typeChoice = scanner.nextLine().trim();
         CustomerType type = CustomerType.INDIVIDUAL;
@@ -91,6 +95,8 @@ public class AuthenticationController {
         try {
             captchaService.verifyCaptcha(challenge.getChallengeId(), captchaInput);
             Customer c = new Customer("CUST-" + (System.currentTimeMillis() % 100000), name, email, phone, type);
+            c.setAddress(address);
+            c.setCity(city);
             Customer registered = authenticationService.registerCustomer(c, username, password);
 
             String regOtp = authenticationService.generateOtpForUsername(username, OtpPurpose.LOGIN_VERIFICATION);
